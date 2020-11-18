@@ -1,0 +1,14 @@
+{
+	"mqtt": {
+		"server": "localhost",
+		"login": "",
+		"password": "",
+		"port": 1883,
+		"useTls": false
+	},
+	"hue": {
+		"discover": true,
+		"clientId": "phue2mqtt",
+		"pollingInterval": 2
+	}
+}
