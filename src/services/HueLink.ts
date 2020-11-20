@@ -74,9 +74,9 @@ export class HueLink {
     let dataToSave = {};
     try {
       const createdUser = await unauthenticatedApi.users.createUser(APP_NAME, this.config.clientId);
-      console.log(`HUE: User created, username: ${createdUser.username}, clientKey: ${createdUser.clientKey}`);
+      console.log(`HUE: User created, username: ${createdUser.username}, clientKey: ${createdUser.clientkey}`);
       this.config.username = createdUser.username;
-      this.config.clientKey = createdUser.clientKey;
+      this.config.clientKey = createdUser.clientkey;
       dataToSave = {
         username: this.config.username,
         clientKey: this.config.clientKey,

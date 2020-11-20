@@ -46,7 +46,7 @@ export class ConfigManager {
         // @ts-ignore
         this.mqttConfig[configKeys] = config.mqtt[configKeys];
       } else {
-        console.error('MQTT: Missing ' + configKeys + ' configuration key.');
+        console.error(`MQTT: Missing ${configKeys} configuration key.`);
         return false;
       }
     }
@@ -96,8 +96,8 @@ export class ConfigManager {
     }
     // Check if config was saved on previous launch
     // if gateway is already define from global config, file is ignored
-    if (fs.existsSync(this.configDirectory + '/hue.json') && this.hueConfig.gateway === '') {
-      const savedConfig = this.readJsonFile(this.configDirectory + '/hue.json');
+    if (fs.existsSync(`${this.configDirectory}/hue.json`) && this.hueConfig.gateway === '') {
+      const savedConfig = this.readJsonFile(`${this.configDirectory}/hue.json`);
       this.hueConfig.username = savedConfig.username;
       this.hueConfig.clientKey = savedConfig.clientKey;
       this.hueConfig.gateway = savedConfig.gateway;
@@ -138,7 +138,7 @@ export class ConfigManager {
       }
     }
     else {
-      console.error('Config file ${configPath} not found.');
+      console.error(`Config file ${configPath} not found.`);
     }
     return true;
   }
