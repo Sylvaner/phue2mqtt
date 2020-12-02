@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  phue-mqtt:
+    build:
+      context: .
+    image: phue-mqtt
+    container_name: phue-mqtt
+    restart: always
+    volumes:
+    - ./config:/config
+

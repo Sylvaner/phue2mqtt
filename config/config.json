@@ -1,8 +1,8 @@
 {
 	"mqtt": {
 		"server": "localhost",
-		"login": "nextdom",
-		"password": "2386vtSC8ZixDpRkboY8XEOdKUQf21",
+		"login": "mqtt",
+		"password": "mqttpassword",
 		"port": 1883,
 		"useTls": false
 	},
