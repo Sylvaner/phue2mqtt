@@ -58,13 +58,13 @@ export class HueLink {
     if (discoveryResults.length > 0) {
       // TODO: Multiple gateway
       this.config.gateway = discoveryResults[0].ipaddress;
-      if (resultCallback) {
-        resultCallback();
-      }
     } else {
       console.error('HUE: Gateway not found');
     }
-  }
+    if (resultCallback) {
+      resultCallback();
+    }
+}
 
   /**
    * Try sync if button gateway is pressed

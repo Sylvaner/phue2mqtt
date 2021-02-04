@@ -30,7 +30,9 @@ function startHue(hueLink: HueLink, mqttConnector: MqttConnector): void {
       });
     } else {
       // First time, discover gateway
-      hueLink.discover(() => { startHue(hueLink, mqttConnector); });
+      hueLink.discover(() => {
+        setTimeout(() => { startHue(hueLink, mqttConnector); }, 5000);
+      });
     }
   }
 }
