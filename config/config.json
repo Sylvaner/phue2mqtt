@@ -10,5 +10,6 @@
 		"discover": true,
 		"clientId": "phue2mqtt",
 		"pollingInterval": 2
-	}
+	},
+	"debug": false
 }

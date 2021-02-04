@@ -9,8 +9,8 @@ const configManager = new ConfigManager();
  *
  * @remarks Sync and discover process on first launch
  *
- * @param mqttConnector MQTT Service
  * @param hueLink Hue service
+ * @param mqttConnector MQTT Service
  */
 function startHue(hueLink: HueLink, mqttConnector: MqttConnector): void {
   if (hueLink.isSynced()) {
@@ -43,18 +43,17 @@ function startHue(hueLink: HueLink, mqttConnector: MqttConnector): void {
  * @remarks Is MQTT is not connected, wait 5 seconds before retry
  *
  * @param hueLink Hue service
- * @param mqttConnector MQTT Service
  */
 function hueStarted(hueLink: HueLink, mqttConnector: MqttConnector): void {
   const waitMqttInterval = setInterval(() => {
     // Waiting MQTT connection
     if (mqttConnector.isConnected()) {
       clearInterval(waitMqttInterval);
-      hueLink.publishAllDevices(mqttConnector);
+      hueLink.publishAllDevices();
       mqttConnector.subscribe(hueLink.getTopicToSubscribe(), (topic, data) => {
         hueLink.parseMessage(topic, data);
       });
-      hueLink.start(mqttConnector);
+      hueLink.start();
     }
   }, 5000)
 }
@@ -68,7 +67,7 @@ if (process.argv.length < 3) {
 else {
   if (configManager.readGlobalConfig(process.argv[2])) {
     const mqttConnector = new MqttConnector(configManager.getMqttConfig());
-    const hueLink = new HueLink(configManager.getHueConfig());
+    const hueLink = new HueLink(configManager.getHueConfig(), mqttConnector, configManager.getDebugMode());
     mqttConnector.connect();
     startHue(hueLink, mqttConnector);
   }

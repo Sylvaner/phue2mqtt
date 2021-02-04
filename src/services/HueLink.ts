@@ -19,9 +19,13 @@ export class HueLink {
     groups: {},
     sensors: {}
   }
+  private mqttConnector: MqttConnector;
+  private debug: boolean;
 
-  constructor(config: HueConfig) {
+  constructor(config: HueConfig, mqttConnector: MqttConnector, debug: boolean) {
     this.config = config;
+    this.mqttConnector = mqttConnector;
+    this.debug = debug;
   }
 
   /**
@@ -160,10 +164,8 @@ export class HueLink {
    * Publish all devices on MQTT
    *
    * @remarks Create cache for prevent update without change
-   *
-   * @param mqttConnector MQTT service
    */
-  public async publishAllDevices(mqttConnector: MqttConnector) {
+  public async publishAllDevices() {
     const deviceTypes = ['lights', 'groups', 'sensors'];
     for (const deviceType of deviceTypes) {
       this.cache[deviceType] = {};
@@ -182,7 +184,7 @@ export class HueLink {
           state,
           model: device.getHuePayload().modelid
         }
-        mqttConnector.publish('phue/' + deviceType + '/' + device.id, this.cache[deviceType][device.id]);
+        this.publishToMqtt(deviceType, device.id, this.cache[deviceType][device.id]);
         // Comparaison on state stringified
         this.hashCache[deviceType][device.id] = JSON.stringify(state);
       }
@@ -191,10 +193,8 @@ export class HueLink {
 
   /**
    * Event loop
-   *
-   * @param mqttConnector MQTT service
    */
-  public async start(mqttConnector: MqttConnector) {
+  public async start() {
     console.log('HUE: Start event loop');
     setInterval(async () => {
       const deviceTypes = ['lights', 'groups', 'sensors'];
@@ -213,10 +213,26 @@ export class HueLink {
           if (this.hashCache[deviceType][device.id] !== hash) {
             this.cache[deviceType][device.id].state = state;
             this.hashCache[deviceType][device.id] = hash;
-            mqttConnector.publish('phue/' + deviceType + '/' + device.id, this.cache[deviceType][device.id]);
+            this.publishToMqtt(deviceType, device.id, this.cache[deviceType][device.id]);
+            if (this.debug) {
+              console.log(`Update ${deviceType}: ${this.cache[deviceType][device.id].name} (${device.id})`);
+              console.log(state);
+            }
           }
         }
       }
     }, this.config.pollingInterval * 1000);
+  }
+
+  /**
+   * Publish to Mqtt topic
+   * 
+   * @param mqttConnector Mqtt connector
+   * @param deviceType Type of the device
+   * @param deviceId Id of the device
+   * @param state New state
+   */
+  private publishToMqtt(deviceType: string, deviceId: string, state: Object): void {
+    this.mqttConnector.publish(`phue/${deviceType}/${deviceId}`, state);
   }
 }

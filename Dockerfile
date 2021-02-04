@@ -2,11 +2,9 @@ FROM node:15-buster-slim
 COPY ./src /build/src
 COPY ./package.* /build/
 COPY ./ts* /build/
-RUN ls /build/
 RUN cd /build && \
     npm install && \
     npm run build
-RUN ls -alR /build
 
 FROM node:15-buster-slim
 RUN mkdir -p /app

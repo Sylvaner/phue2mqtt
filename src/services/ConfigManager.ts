@@ -7,11 +7,13 @@ export class ConfigManager {
   private mqttConfig: MqttConfig;
   private hueConfig: HueConfig;
   private configDirectory: string;
+  private debug: boolean;
 
   constructor() {
     this.mqttConfig = new MqttConfig();
     this.hueConfig = new HueConfig();
     this.configDirectory = '';
+    this.debug = false;
   }
 
   /**
@@ -136,6 +138,9 @@ export class ConfigManager {
       if (!this.parseHueConfig(config)) {
         return false;
       }
+      if (config.hasOwnProperty('debug')) {
+        this.debug = config.debug;
+      }
     }
     else {
       console.error(`Config file ${configPath} not found.`);
@@ -159,5 +164,14 @@ export class ConfigManager {
    */
   public getHueConfig(): HueConfig {
     return this.hueConfig;
+  }
+
+  /**
+   * Obtain debug mode state
+   * 
+   * @returns Debug mode state
+   */
+  public getDebugMode(): boolean {
+    return this.debug;
   }
 }
