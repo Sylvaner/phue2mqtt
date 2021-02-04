@@ -51,11 +51,12 @@ function hueStarted(hueLink: HueLink, mqttConnector: MqttConnector): void {
     // Waiting MQTT connection
     if (mqttConnector.isConnected()) {
       clearInterval(waitMqttInterval);
-      hueLink.publishAllDevices();
-      mqttConnector.subscribe(hueLink.getTopicToSubscribe(), (topic, data) => {
-        hueLink.parseMessage(topic, data);
+      hueLink.publishAllDevices(() => {
+        mqttConnector.subscribe(hueLink.getTopicToSubscribe(), (topic, data) => {
+          hueLink.parseMessage(topic, data);
+        });
+        hueLink.start();
       });
-      hueLink.start();
     }
   }, 5000)
 }

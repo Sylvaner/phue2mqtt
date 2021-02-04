@@ -2,25 +2,58 @@ import Hue from 'node-hue-api';
 import Api from 'node-hue-api/lib/api/Api';
 import { HueConfig } from "../models/HueConfig";
 import { MqttConnector } from './MqttConnector';
+import {DeviceProperty} from "../models/DeviceProperty";
+import {CachedDevice} from "../models/CachedDevice";
 
 const APP_NAME = 'PHUE2MQTT';
 
 export class HueLink {
   private config: HueConfig;
   private apiLink!: Api;
-  private commandTopic: RegExp = /^phue\/(.*?)\/(.*?)\/set/;
-  private cache: any = {
-    lights: {},
-    groups: {},
-    sensors: {}
-  };
-  private hashCache: any = {
-    lights: {},
-    groups: {},
-    sensors: {}
-  }
+  private commandTopic: RegExp = /^homie\/(.*?)-(.*?)\/(.*?)\/(.*)$/;
+  private cache: {[key: string]: CachedDevice} = {}
   private mqttConnector: MqttConnector;
   private debug: boolean;
+  private managedProperties: { [key: string]: DeviceProperty; } = {
+    'on': {
+      '$name': 'On',
+      '$datatype': 'boolean',
+      '$settable': 'true'
+    },
+    'bri': {
+      '$name': 'Brightness',
+      '$datatype': 'integer',
+      '$settable': 'true',
+      '$format': '1:254'
+    },
+    'ct': {
+      '$name': 'Color temperature',
+      '$datatype': 'integer',
+      '$settable': 'true',
+      '$format': '153:500'
+    },
+    'status': {
+      '$name': 'Status',
+      '$datatype': 'integer',
+      '$settable': 'false'
+    },
+    'buttonevent': {
+      '$name': 'Button event',
+      '$datatype': 'integer',
+      '$settable': 'false'
+    },
+    'battery': {
+      '$name': 'Battery',
+      '$datatype': 'integer',
+      '$unit': '%',
+      '$settable': 'false'
+    },
+    'lastupdated': {
+      '$name': 'Last updated',
+      '$datatype': 'datetime',
+      '$settable': 'true'
+    }
+  }
 
   constructor(config: HueConfig, mqttConnector: MqttConnector, debug: boolean) {
     this.config = config;
@@ -64,7 +97,7 @@ export class HueLink {
     if (resultCallback) {
       resultCallback();
     }
-}
+  }
 
   /**
    * Try sync if button gateway is pressed
@@ -115,7 +148,7 @@ export class HueLink {
         callbackFunc();
       }
     } catch (error) {
-      console.log(`HUE: ${error.message}`);
+      console.error(`HUE: ${error.message}`);
     }
   }
 
@@ -125,7 +158,26 @@ export class HueLink {
    * @returns Topic message
    */
   public getTopicToSubscribe(): string {
-    return 'phue/+/+/set';
+    return 'homie/+/+/#';
+  }
+
+  /**
+   * Transform raw message from string to the best type
+   *
+   * @param rawData Data from message
+   *
+   * @return Transformed data
+   */
+  private static prepareMessageData(rawData: string): any {
+    let data: any = rawData
+    if (/^\d+$/.test(rawData)) {
+      data = parseInt(rawData, 10);
+    } else if (rawData === 'true') {
+      data = true;
+    } else if (rawData === 'false') {
+      data = false;
+    }
+    return data;
   }
 
   /**
@@ -135,29 +187,86 @@ export class HueLink {
    * @param rawData Message data
    */
   public parseMessage(topic: string, rawData: string): void {
-    try {
       // Extract informations from topic with regex
       const topicData = this.commandTopic.exec(topic);
-      const data = JSON.parse(rawData.toString());
-      const dataKeys = Object.keys(data);
-      if (topicData !== null && topicData.length > 2 && dataKeys.length > 0) {
+      const data: any = HueLink.prepareMessageData(rawData.toString());
+      if (topicData !== null && topicData.length > 2) {
         const deviceType = topicData[1];
         const deviceId = topicData[2];
+        const targetProperty = topicData[4];
+        const rawDeviceId = `${deviceType}-${deviceId}`;
         // Test if device type, device and state to change exists
-        if (this.cache.hasOwnProperty(deviceType) &&
-          this.cache[deviceType].hasOwnProperty(deviceId) &&
-          this.cache[deviceType][deviceId].state.hasOwnProperty(dataKeys[0])) {
+        if (this.cache.hasOwnProperty(rawDeviceId) &&
+            this.cache[rawDeviceId].state.hasOwnProperty(targetProperty)) {
           // Call specific method depends of device type
-          if (deviceType === 'lights') {
-            this.apiLink.lights.setLightState(deviceId, data);
-          } else if (deviceType === 'groups') {
-            this.apiLink.groups.setGroupState(deviceId, data);
+          const parsedData: any = {};
+          parsedData[targetProperty] = data;
+          this.cache[rawDeviceId].state[targetProperty] = data;
+          try {
+            if (deviceType === 'lights') {
+              this.apiLink.lights.setLightState(deviceId, parsedData);
+            } else if (deviceType === 'groups') {
+              this.apiLink.groups.setGroupState(deviceId, parsedData);
+            }
+          } catch (error) {
+            console.error(`HUE: Error on received message ${rawData.toString()}`);
           }
         }
       }
-    } catch (error) {
-      console.error(`HUE: Error on received message ${rawData.toString()}`);
+  }
+
+  /**
+   * Publish all device properties
+   *
+   * @param deviceId Mqtt device id (lights-2)
+   * @param deviceType Type of the device
+   * @param deviceState State data
+   *
+   * @return True if device have managed property
+   */
+  public publishProperties(deviceId: string, deviceType: string, deviceState: any): boolean {
+    const nodes = Object.keys(deviceState).filter((stateId) => { return this.managedProperties[stateId] !== undefined; });
+    // console.log(Object.keys(deviceState).filter((stateId) => { return managedProperties[stateId] === undefined; }));
+    if (nodes.length > 0) {
+      this.publishToMqtt(`${deviceId}/${deviceType}/$properties`, nodes.join(','));
+      for (const propertyName of Object.keys(this.managedProperties)) {
+        if (deviceState.hasOwnProperty(propertyName)) {
+          this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}`, deviceState[propertyName]);
+          this.cache[deviceId].state[propertyName] = deviceState[propertyName];
+          for (const propertyItem of Object.keys(this.managedProperties[propertyName])) {
+            this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}/${propertyItem}`, this.managedProperties[propertyName][propertyItem]);
+          }
+          nodes.push(propertyName);
+        }
+      }
+      return true;
     }
+    return false;
+  }
+
+  /**
+   * Obtain state data of a device
+   *
+   * @param deviceType Device type
+   * @param device Device data
+   *
+   * @return Object with all informations
+   */
+  private static getStateFromDevice(deviceType: string, device: any): {[key: string]: string} {
+    let state;
+    switch (deviceType) {
+      case 'lights':
+        state = device.getHuePayload().state;
+        break;
+      case 'groups':
+        state = device.getHuePayload().action;
+        break;
+      case 'sensors':
+      default:
+        state = {...device.getHuePayload().state, ...device.getHuePayload().config}
+        break;
+    }
+    return state
   }
 
   /**
@@ -165,29 +274,45 @@ export class HueLink {
    *
    * @remarks Create cache for prevent update without change
    */
-  public async publishAllDevices() {
-    const deviceTypes = ['lights', 'groups', 'sensors'];
-    for (const deviceType of deviceTypes) {
-      this.cache[deviceType] = {};
+  public async publishAllDevices(callbackFunc:() => void) {
+    const deviceTypes: {[key: string]: string} = {
+      'lights': 'Lights',
+      'groups': 'Groups',
+      'sensors': 'Sensors'
+    };
+    for (const deviceType of Object.keys(deviceTypes)) {
       // @ts-ignore
       const devices = await this.apiLink[deviceType].getAll();
       for (const device of devices) {
-        let state;
-        if (deviceType === 'groups') {
-          state = device.getHuePayload().action;
-        } else {
-          state = device.getHuePayload().state;
+        // Transform to Homie convention: https://homieiot.github.io/
+        // state in homie => reachable
+        let deviceState = 'ready';
+        const state = HueLink.getStateFromDevice(deviceType, device);
+        const devicePayload = device.getHuePayload();
+        const deviceId = `${deviceType}-${devicePayload.id}`;
+
+        if (state.hasOwnProperty('reachable') && !state.reachable) {
+          deviceState = 'disconnected';
         }
-        this.cache[deviceType][device.id] = {
-          id: device.id,
+        this.publishToMqtt(`${deviceId}/${deviceType}/$name`, deviceTypes[deviceType]);
+        this.cache[deviceId] = {
+          id: devicePayload.id,
           name: device.name,
-          state,
+          state: {},
           model: device.getHuePayload().modelid
         }
-        this.publishToMqtt(deviceType, device.id, this.cache[deviceType][device.id]);
-        // Comparaison on state stringified
-        this.hashCache[deviceType][device.id] = JSON.stringify(state);
+        if (!this.publishProperties(deviceId, deviceType, state)) {
+          console.warn(`Device ${devicePayload.name} has no property managed by Phue2mqtt`);
+        }
+        this.publishToMqtt(`${deviceId}/$homie`, '4.0');
+        this.publishToMqtt(`${deviceId}/$name`, devicePayload.name);
+        this.publishToMqtt(`${deviceId}/$state`, deviceState);
+        this.publishToMqtt(`${deviceId}/$nodes`, deviceType);
       }
+    }
+    console.log('HUE: Devices published');
+    if (callbackFunc !== undefined) {
+      callbackFunc();
     }
   }
 
@@ -202,21 +327,12 @@ export class HueLink {
         // @ts-ignore
         const devices = await this.apiLink[deviceType].getAll();
         for (const device of devices) {
-          let state;
-          if (deviceType === 'groups') {
-            state = device.getHuePayload().action;
-          } else {
-            state = device.getHuePayload().state;
-          }
-          // Test if update is necessary
-          const hash = JSON.stringify(state);
-          if (this.hashCache[deviceType][device.id] !== hash) {
-            this.cache[deviceType][device.id].state = state;
-            this.hashCache[deviceType][device.id] = hash;
-            this.publishToMqtt(deviceType, device.id, this.cache[deviceType][device.id]);
-            if (this.debug) {
-              console.log(`Update ${deviceType}: ${this.cache[deviceType][device.id].name} (${device.id})`);
-              console.log(state);
+          const state = HueLink.getStateFromDevice(deviceType, device);
+          const deviceId = `${deviceType}-${device.id}`;
+          for (const propertyName of Object.keys(this.cache[deviceId].state)) {
+            if (state[propertyName] !== this.cache[deviceId].state[propertyName]) {
+              this.cache[deviceId].state[propertyName] = state[propertyName];
+              this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}`, state[propertyName]);
             }
           }
         }
@@ -226,13 +342,11 @@ export class HueLink {
 
   /**
    * Publish to Mqtt topic
-   * 
-   * @param mqttConnector Mqtt connector
-   * @param deviceType Type of the device
-   * @param deviceId Id of the device
-   * @param state New state
+   *
+   * @param topic MQTT topic
+   * @param data Data to publish
    */
-  private publishToMqtt(deviceType: string, deviceId: string, state: Object): void {
-    this.mqttConnector.publish(`phue/${deviceType}/${deviceId}`, state);
+  private publishToMqtt(topic: string, data: any): void {
+    this.mqttConnector.publish(`homie/${topic}`, data);
   }
 }
