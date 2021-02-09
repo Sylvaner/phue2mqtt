@@ -308,6 +308,9 @@ export class HueLink {
         this.publishToMqtt(`${deviceId}/$name`, devicePayload.name);
         this.publishToMqtt(`${deviceId}/$state`, deviceState);
         this.publishToMqtt(`${deviceId}/$nodes`, deviceType);
+        if (this.debug) {
+          console.log(` - Published ${device.name} - ${deviceId}`);
+        }
       }
     }
     console.log('HUE: Devices published');
@@ -331,6 +334,9 @@ export class HueLink {
           const deviceId = `${deviceType}-${device.id}`;
           for (const propertyName of Object.keys(this.cache[deviceId].state)) {
             if (state[propertyName] !== this.cache[deviceId].state[propertyName]) {
+              if (this.debug) {
+                console.log(` - Change published ${deviceId} -> ${propertyName}: ${state[propertyName]}`)
+              }
               this.cache[deviceId].state[propertyName] = state[propertyName];
               this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}`, state[propertyName]);
             }
