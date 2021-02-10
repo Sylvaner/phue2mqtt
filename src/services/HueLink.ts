@@ -199,7 +199,6 @@ export class HueLink {
         if (this.cache.hasOwnProperty(rawDeviceId) &&
             this.cache[rawDeviceId].state.hasOwnProperty(targetProperty) &&
             this.cache[rawDeviceId].state[targetProperty] !== data) {
-          
           // Call specific method depends of device type
           const parsedData: any = {};
           parsedData[targetProperty] = data;
