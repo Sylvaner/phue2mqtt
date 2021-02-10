@@ -225,18 +225,16 @@ export class HueLink {
    * @return True if device have managed property
    */
   public publishProperties(deviceId: string, deviceType: string, deviceState: any): boolean {
-    const nodes = Object.keys(deviceState).filter((stateId) => { return this.managedProperties[stateId] !== undefined; });
+    const properties = Object.keys(deviceState).filter((stateId) => { return this.managedProperties[stateId] !== undefined; });
     // console.log(Object.keys(deviceState).filter((stateId) => { return managedProperties[stateId] === undefined; }));
-    if (nodes.length > 0) {
-      this.publishToMqtt(`${deviceId}/${deviceType}/$properties`, nodes.join(','));
-      for (const propertyName of Object.keys(this.managedProperties)) {
-        if (deviceState.hasOwnProperty(propertyName)) {
-          this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}`, deviceState[propertyName]);
-          this.cache[deviceId].state[propertyName] = deviceState[propertyName];
-          for (const propertyItem of Object.keys(this.managedProperties[propertyName])) {
-            this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}/${propertyItem}`, this.managedProperties[propertyName][propertyItem]);
-          }
-          nodes.push(propertyName);
+    if (properties.length > 0) {
+      // Publish list of properties
+      this.publishToMqtt(`${deviceId}/${deviceType}/$properties`, properties.join(','));
+      for (const propertyName of properties) {
+        this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}`, deviceState[propertyName]);
+        this.cache[deviceId].state[propertyName] = deviceState[propertyName];
+        for (const propertyInfo of Object.keys(this.managedProperties[propertyName])) {
+          this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}/${propertyInfo}`, this.managedProperties[propertyName][propertyInfo]);
         }
       }
       return true;
