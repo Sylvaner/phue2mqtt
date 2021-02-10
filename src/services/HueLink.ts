@@ -186,7 +186,7 @@ export class HueLink {
    * @param topic Source topic
    * @param rawData Message data
    */
-  public parseMessage(topic: string, rawData: string): void {
+  public async parseMessage(topic: string, rawData: string) {
       // Extract informations from topic with regex
       const topicData = this.commandTopic.exec(topic);
       const data: any = HueLink.prepareMessageData(rawData.toString());
@@ -197,19 +197,21 @@ export class HueLink {
         const rawDeviceId = `${deviceType}-${deviceId}`;
         // Test if device type, device and state to change exists
         if (this.cache.hasOwnProperty(rawDeviceId) &&
-            this.cache[rawDeviceId].state.hasOwnProperty(targetProperty)) {
+            this.cache[rawDeviceId].state.hasOwnProperty(targetProperty) &&
+            this.cache[rawDeviceId].state[targetProperty] !== data) {
+          
           // Call specific method depends of device type
           const parsedData: any = {};
           parsedData[targetProperty] = data;
           this.cache[rawDeviceId].state[targetProperty] = data;
           try {
             if (deviceType === 'lights') {
-              this.apiLink.lights.setLightState(deviceId, parsedData);
+              await this.apiLink.lights.setLightState(deviceId, parsedData);
             } else if (deviceType === 'groups') {
-              this.apiLink.groups.setGroupState(deviceId, parsedData);
+              await this.apiLink.groups.setGroupState(deviceId, parsedData);
             }
           } catch (error) {
-            console.error(`HUE: Error on received message ${rawData.toString()}`);
+            console.error(`HUE: Error on received message ${topic} - ${rawData.toString()} : ${error.message}`);
           }
         }
       }
