@@ -113,7 +113,6 @@ export class ConfigManager {
    * @param hueData Data to save with credentials
    */
   public saveHueData(hueData: object): void {
-    console.log(hueData);
     const hueFileContent = JSON.stringify(hueData);
     fs.writeFile(`${this.configDirectory}/hue.json`, hueFileContent, () => {
       console.log(`HUE: Data saved ${this.configDirectory}/hue.json`)

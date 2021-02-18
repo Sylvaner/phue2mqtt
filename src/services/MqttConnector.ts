@@ -1,5 +1,4 @@
 import mqtt from 'mqtt';
-import { exit } from 'process';
 import { MqttConfig } from '../models/MqttConfig';
 
 export class MqttConnector {
@@ -27,8 +26,7 @@ export class MqttConnector {
    *
    * @param connectionCallback Function called when connection established
    */
-  public connect(connectionCallback?: () => void): void {
-    this.connected = true;
+  public connect(connectionCallback?: () => void, disconnectionCallback?: () => void): void {
     let protocol = 'mqtt';
     if (this.config.useTls) {
       protocol = protocol + 's';
@@ -41,10 +39,12 @@ export class MqttConnector {
     this.mqttClient.on('error', (e) => {
       if (e.message.indexOf('Connection refused') >= 0) {
         console.error('MQTT: connection failed');
-        exit(1);
+        this.connected = false;
+        this.mqttClient.end(true, {}, disconnectionCallback);
       } else if (e.message.indexOf('connect ECONNREFUSED') >= 0) {
         console.error('MQTT: Server unreachable');
-        exit(1);
+        this.connected = false;
+        this.mqttClient.end(true, {}, disconnectionCallback);
       } else {
         console.error(e);
       }
@@ -55,6 +55,11 @@ export class MqttConnector {
       if (connectionCallback) {
         connectionCallback();
       }
+    });
+    // Retry to connect every 10 secondes
+    this.mqttClient.on('disconnect', () => {
+      this.connected = false;
+      this.mqttClient.end(true, {}, disconnectionCallback);
     });
     this.mqttClient.on('message', (topic: string, message: string) => {
       if (this.messageParser !== undefined) {

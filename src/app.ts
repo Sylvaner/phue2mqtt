@@ -62,6 +62,28 @@ function hueStarted(hueLink: HueLink, mqttConnector: MqttConnector): void {
 }
 
 /**
+ * Initialise all connections
+ */
+function start(mqttConnector: MqttConnector): void {
+  const hueLink = new HueLink(configManager.getHueConfig(), mqttConnector, configManager.getDebugMode());
+  startHue(hueLink, mqttConnector);
+  mqttConnector.connect(
+    // Connection callback
+    () => {},
+    // Disconnection callback
+    () => {
+      if (configManager.getDebugMode()) {
+        console.log(new Error().stack);
+      }
+      setTimeout(() => {
+        hueLink.stop();
+        // Retry connection
+        start(mqttConnector);
+      }, 5000);
+    });
+}
+
+/**
  * Entry point
  */
 if (process.argv.length < 3) {
@@ -70,8 +92,6 @@ if (process.argv.length < 3) {
 else {
   if (configManager.readGlobalConfig(process.argv[2])) {
     const mqttConnector = new MqttConnector(configManager.getMqttConfig());
-    const hueLink = new HueLink(configManager.getHueConfig(), mqttConnector, configManager.getDebugMode());
-    mqttConnector.connect();
-    startHue(hueLink, mqttConnector);
+    start(mqttConnector);
   }
 }

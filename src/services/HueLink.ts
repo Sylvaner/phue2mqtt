@@ -14,6 +14,7 @@ export class HueLink {
   private cache: {[key: string]: CachedDevice} = {}
   private mqttConnector: MqttConnector;
   private debug: boolean;
+  private refreshInterval?: NodeJS.Timeout;
   private managedProperties: { [key: string]: DeviceProperty; } = {
     'on': {
       '$name': 'On',
@@ -324,7 +325,7 @@ export class HueLink {
    */
   public async start() {
     console.log('HUE: Start event loop');
-    setInterval(async () => {
+    this.refreshInterval = setInterval(async () => {
       const deviceTypes = ['lights', 'groups', 'sensors'];
       for (const deviceType of deviceTypes) {
         // @ts-ignore
@@ -344,6 +345,15 @@ export class HueLink {
         }
       }
     }, this.config.pollingInterval * 1000);
+  }
+
+  /**
+   * Stop HUE refresh loop
+   */
+  public stop() {
+    if (this.refreshInterval) {
+      clearInterval(this.refreshInterval);
+    }
   }
 
   /**
