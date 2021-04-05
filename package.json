@@ -4,7 +4,7 @@
   "description": "Bridge between Philips HUE Gateway and MQTT",
   "main": "index.js",
   "scripts": {
-    "serve": "tsc -w & nodemon -q -w dist dist/app.js",
+    "serve": "tsc -w & nodemon -q -w dist dist/app.js config/config.json",
     "build": "tsc -p .",
     "start": "node dist/app.js",
     "test": "echo \"Error: no test specified\" && exit 1"

@@ -190,6 +190,9 @@ export class HueLink {
       // Extract informations from topic with regex
       const topicData = this.commandTopic.exec(topic);
       const data: any = HueLink.prepareMessageData(rawData.toString());
+      if (this.debug) {
+        console.log(topic + ' -> ' + data);
+      }
       if (topicData !== null && topicData.length > 2) {
         const deviceType = topicData[1];
         const deviceId = topicData[2];
@@ -202,13 +205,17 @@ export class HueLink {
           const parsedData: any = {};
           parsedData[targetProperty] = data;
           this.cache[rawDeviceId].state[targetProperty] = data;
+          if (this.debug) {
+            console.log('Send to Api: ');
+            console.log(parsedData);
+          }
           try {
             if (deviceType === 'lights') {
               this.apiLink.lights.setLightState(deviceId, parsedData);
             } else if (deviceType === 'groups') {
               this.apiLink.groups.setGroupState(deviceId, parsedData);
             }
-          } catch (error) {
+          } catch (error: any) {
             console.error(`HUE: Error on received message ${rawData.toString()}`);
           }
         }

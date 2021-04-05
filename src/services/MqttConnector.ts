@@ -69,8 +69,13 @@ export class MqttConnector {
    * @param topic Target topic
    * @param data JSON object stringify in process
    */
-  public publish(topic: string, data: object): void {
-    this.mqttClient.publish(topic, JSON.stringify(data));
+  public publish(topic: string, data: any): void {
+    if (typeof data === 'number') {
+      data = data.toString();
+    } else if (typeof data === 'boolean') {
+      data = data ? 'true' : 'false';
+    }
+    this.mqttClient.publish(topic, data);
   }
 
   /**
