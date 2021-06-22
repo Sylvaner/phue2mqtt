@@ -74,8 +74,18 @@ export class MqttConnector {
    * @param topic Target topic
    * @param data JSON object stringify in process
    */
-  public publish(topic: string, data: object): void {
+  public publish(topic: string, data: any): void {
     this.mqttClient.publish(topic, JSON.stringify(data));
+  }
+
+  /**
+   * Publish message on topic
+   *
+   * @param topic Target topic
+   * @param data JSON object stringify in process
+   */
+  public publishAndRetain(topic: string, data: any): void {
+    this.mqttClient.publish(topic, JSON.stringify(data), { retain: true });
   }
 
   /**
