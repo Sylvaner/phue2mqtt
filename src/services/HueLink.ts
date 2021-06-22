@@ -187,7 +187,7 @@ export class HueLink {
    * @param topic Source topic
    * @param rawData Message data
    */
-  public parseMessage(topic: string, rawData: string): void {
+  public async parseMessage(topic: string, rawData: string) {
       // Extract informations from topic with regex
       const topicData = this.commandTopic.exec(topic);
       const data: any = HueLink.prepareMessageData(rawData.toString());
@@ -198,19 +198,20 @@ export class HueLink {
         const rawDeviceId = `${deviceType}-${deviceId}`;
         // Test if device type, device and state to change exists
         if (this.cache.hasOwnProperty(rawDeviceId) &&
-            this.cache[rawDeviceId].state.hasOwnProperty(targetProperty)) {
+            this.cache[rawDeviceId].state.hasOwnProperty(targetProperty) &&
+            this.cache[rawDeviceId].state[targetProperty] !== data) {
           // Call specific method depends of device type
           const parsedData: any = {};
           parsedData[targetProperty] = data;
           this.cache[rawDeviceId].state[targetProperty] = data;
           try {
             if (deviceType === 'lights') {
-              this.apiLink.lights.setLightState(deviceId, parsedData);
+              await this.apiLink.lights.setLightState(deviceId, parsedData);
             } else if (deviceType === 'groups') {
-              this.apiLink.groups.setGroupState(deviceId, parsedData);
+              await this.apiLink.groups.setGroupState(deviceId, parsedData);
             }
           } catch (error) {
-            console.error(`HUE: Error on received message ${rawData.toString()}`);
+            console.error(`HUE: Error on received message ${topic} - ${rawData.toString()} : ${error.message}`);
           }
         }
       }
@@ -226,18 +227,16 @@ export class HueLink {
    * @return True if device have managed property
    */
   public publishProperties(deviceId: string, deviceType: string, deviceState: any): boolean {
-    const nodes = Object.keys(deviceState).filter((stateId) => { return this.managedProperties[stateId] !== undefined; });
+    const properties = Object.keys(deviceState).filter((stateId) => { return this.managedProperties[stateId] !== undefined; });
     // console.log(Object.keys(deviceState).filter((stateId) => { return managedProperties[stateId] === undefined; }));
-    if (nodes.length > 0) {
-      this.mqttConnector.publish(`${deviceId}/${deviceType}/$properties`, nodes.join(','));
-      for (const propertyName of Object.keys(this.managedProperties)) {
-        if (deviceState.hasOwnProperty(propertyName)) {
-          this.mqttConnector.publish(`${deviceId}/${deviceType}/${propertyName}`, deviceState[propertyName]);
-          this.cache[deviceId].state[propertyName] = deviceState[propertyName];
-          for (const propertyItem of Object.keys(this.managedProperties[propertyName])) {
-            this.mqttConnector.publish(`${deviceId}/${deviceType}/${propertyName}/${propertyItem}`, this.managedProperties[propertyName][propertyItem]);
-          }
-          nodes.push(propertyName);
+    if (properties.length > 0) {
+      // Publish list of properties
+      this.publishToMqtt(`${deviceId}/${deviceType}/$properties`, properties.join(','));
+      for (const propertyName of properties) {
+        this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}`, deviceState[propertyName]);
+        this.cache[deviceId].state[propertyName] = deviceState[propertyName];
+        for (const propertyInfo of Object.keys(this.managedProperties[propertyName])) {
+          this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}/${propertyInfo}`, this.managedProperties[propertyName][propertyInfo]);
         }
       }
       return true;
