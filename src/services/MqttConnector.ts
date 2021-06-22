@@ -24,9 +24,9 @@ export class MqttConnector {
   /**
    * Connect to MQTT server and initialise events listeners
    *
-   * @param connectionCallback Function called when connection established
+   * @param disconnectionCallback Function called when connection established
    */
-  public connect(connectionCallback?: () => void, disconnectionCallback?: () => void): void {
+  public connect(disconnectionCallback?: () => void): void {
     let protocol = 'mqtt';
     if (this.config.useTls) {
       protocol = protocol + 's';
@@ -52,9 +52,6 @@ export class MqttConnector {
     this.mqttClient.on('connect', () => {
       console.log('MQTT: Connected');
       this.connected = true;
-      if (connectionCallback) {
-        connectionCallback();
-      }
     });
     // Retry to connect every 10 secondes
     this.mqttClient.on('disconnect', () => {
@@ -74,7 +71,7 @@ export class MqttConnector {
    * @param topic Target topic
    * @param data JSON object stringify in process
    */
-  public publish(topic: string, data: object | string): void {
+  public publish(topic: string, data: unknown | string): void {
     if (typeof data === 'string') {
       this.mqttClient.publish(topic, data);
     } else {
@@ -88,7 +85,7 @@ export class MqttConnector {
    * @param topic Target topic
    * @param data JSON object stringify in process
    */
-  public publishAndRetain(topic: string, data: any): void {
+  public publishAndRetain(topic: string, data: unknown): void {
     this.mqttClient.publish(topic, JSON.stringify(data), { retain: true });
   }
 
@@ -98,7 +95,7 @@ export class MqttConnector {
    * @param topic Source topic
    * @param messageParser Message parser
    */
-  public subscribe(topic: string, messageParser: (topic: string, data: string) => void): void {
+  public subscribe(topic: string, messageParser: (srcTopic: string, data: string) => void): void {
     this.mqttClient.subscribe(topic);
     this.messageParser = messageParser;
   }

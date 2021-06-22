@@ -3,108 +3,25 @@ import path from 'path';
 import { MqttConfig } from '../models/MqttConfig';
 import { HueConfig } from '../models/HueConfig';
 
+type GlobalConfig = {
+  mqtt: MqttConfig,
+  hue: HueConfig,
+  debug: boolean
+}
+
 export class ConfigManager {
-  private mqttConfig: MqttConfig;
-  private hueConfig: HueConfig;
+  private config: GlobalConfig;
   private configDirectory: string;
   private debug: boolean;
 
   constructor() {
-    this.mqttConfig = new MqttConfig();
-    this.hueConfig = new HueConfig();
+    this.config = {
+      mqtt: new MqttConfig(),
+      hue: new HueConfig(),
+      debug: false
+    };
     this.configDirectory = '';
     this.debug = false;
-  }
-
-  /**
-   * Read json file content
-   *
-   * @param filepath File path
-   *
-   * @returns Readed data
-   */
-  private readJsonFile(filepath: string) {
-    const fileContent = fs.readFileSync(filepath);
-    const rawContent = fileContent.toString();
-    return JSON.parse(rawContent);
-  }
-
-  /**
-   * Read MQTT config from global config
-   *
-   * @remarks Test keys
-   *
-   * @param config Global config
-   *
-   * @returns True on success
-   */
-  private parseMqttConfig(config: any): boolean {
-    if (!config.hasOwnProperty('mqtt')) {
-      console.error('MQTT: configuration not found');
-      return false;
-    }
-    for (const configKeys of Object.keys(this.mqttConfig)) {
-      if (config.mqtt.hasOwnProperty(configKeys)) {
-        // @ts-ignore
-        this.mqttConfig[configKeys] = config.mqtt[configKeys];
-      } else {
-        console.error(`MQTT: Missing ${configKeys} configuration key.`);
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /**
-   * Read Hue config from global config
-   *
-   * @remarks Global config is priority on hue config file.
-   *
-   * @param config Global config
-   *
-   * @returns True on success
-   */
-  private parseHueConfig(config: any): boolean {
-    if (!config.hasOwnProperty('hue')) {
-      console.error('HUE: configuration not found');
-      return false;
-    }
-    if (config.hue.discover !== undefined &&
-      config.hue.discover === false &&
-      config.hue.gateway === undefined &&
-      config.hue.gateway === '') {
-      console.error('HUE: Disabled discover and no gateway specified');
-      return false;
-    }
-    // Read global config
-    if (config.hue.pollingInterval !== undefined) {
-      this.hueConfig.pollingInterval = config.hue.pollingInterval;
-    }
-    if (config.hue.clientId !== undefined) {
-      this.hueConfig.clientId = config.hue.clientId;
-    }
-    if (config.hue.discover !== undefined) {
-      this.hueConfig.discover = config.hue.discover;
-    }
-    // If username, clientKey and gateway is specified, doesn't need to sync
-    if (config.hue.username !== undefined) {
-      this.hueConfig.username = config.hue.username;
-    }
-    if (config.hue.clientKey !== undefined) {
-      this.hueConfig.clientKey = config.hue.clientKey;
-    }
-    if (config.hue.gateway !== undefined) {
-      this.hueConfig.gateway = config.hue.gateway;
-    }
-    // Check if config was saved on previous launch
-    // if gateway is already define from global config, file is ignored
-    if (fs.existsSync(`${this.configDirectory}/hue.json`) && this.hueConfig.gateway === '') {
-      const savedConfig = this.readJsonFile(`${this.configDirectory}/hue.json`);
-      this.hueConfig.username = savedConfig.username;
-      this.hueConfig.clientKey = savedConfig.clientKey;
-      this.hueConfig.gateway = savedConfig.gateway;
-    }
-    return true;
   }
 
   /**
@@ -112,7 +29,7 @@ export class ConfigManager {
    *
    * @param hueData Data to save with credentials
    */
-  public saveHueData(hueData: object): void {
+  public saveHueData(hueData: any): void {
     const hueFileContent = JSON.stringify(hueData);
     fs.writeFile(`${this.configDirectory}/hue.json`, hueFileContent, () => {
       console.log(`HUE: Data saved ${this.configDirectory}/hue.json`)
@@ -130,16 +47,8 @@ export class ConfigManager {
   public readGlobalConfig(configPath: string): boolean {
     if (fs.existsSync(configPath)) {
       this.configDirectory = path.dirname(fs.realpathSync(configPath))
-      const config = this.readJsonFile(configPath);
-      if (!this.parseMqttConfig(config)) {
-        return false;
-      }
-      if (!this.parseHueConfig(config)) {
-        return false;
-      }
-      if (config.hasOwnProperty('debug')) {
-        this.debug = config.debug;
-      }
+      const rawConfig = this.readJsonFile(configPath);
+      this.config  = this.parseRawConfig(rawConfig);
     }
     else {
       console.error(`Config file ${configPath} not found.`);
@@ -148,12 +57,59 @@ export class ConfigManager {
   }
 
   /**
+   * Read json file content
+   *
+   * @param filepath File path
+   *
+   * @returns Readed data
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private readJsonFile(filepath: string): any {
+    const fileContent = fs.readFileSync(filepath);
+    const rawContent = fileContent.toString();
+    return JSON.parse(rawContent);
+  }
+
+  /**
+   * Read config type safety
+   * 
+   * @param rawConfig Data readed from JSON file
+   * @returns Typed data
+   */
+  private parseRawConfig(rawConfig: any): GlobalConfig {
+    if (!Object.prototype.hasOwnProperty.call(rawConfig, 'mqtt')) {
+      throw new Error('MQTT: configuration not found');
+    }
+    if (!Object.prototype.hasOwnProperty.call(rawConfig, 'hue')) {
+      throw new Error('HUE: configuration not found');
+    }
+    const globalConfig: GlobalConfig = {
+      mqtt: MqttConfig.parseFromJson(rawConfig.mqtt),
+      hue: HueConfig.parseFromJson(rawConfig.hue),
+      debug: false
+    }
+    // @TODO: A déplacer
+    // Check if config was saved on previous launch
+    // if gateway is already define from global config, file is ignored
+    if (fs.existsSync(`${this.configDirectory}/hue.json`) && globalConfig.hue.gateway === '') {
+      const savedConfig = this.readJsonFile(`${this.configDirectory}/hue.json`);
+      globalConfig.hue.username = savedConfig.username;
+      globalConfig.hue.clientKey = savedConfig.clientKey;
+      globalConfig.hue.gateway = savedConfig.gateway;
+    }
+    if (Object.prototype.hasOwnProperty.call(rawConfig, 'debug')) {
+      globalConfig.debug = rawConfig.debug;
+    }
+    return globalConfig;
+  }
+
+  /**
    * Obtain MQTT configuration
    *
    * @returns MQTT configuration
    */
   public getMqttConfig(): MqttConfig {
-    return this.mqttConfig;
+    return this.config.mqtt;
   }
 
   /**
@@ -162,7 +118,7 @@ export class ConfigManager {
    * @returns Hue configuration
    */
   public getHueConfig(): HueConfig {
-    return this.hueConfig;
+    return this.config.hue;
   }
 
   /**

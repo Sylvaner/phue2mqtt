@@ -105,7 +105,7 @@ export class HueLink {
    *
    * @param resultCallback Function called on sync with empty data on fail or credentials on success
    */
-  public async tryToSync(resultCallback?: (dataToSave: object) => void) {
+  public async tryToSync(resultCallback?: (dataToSave: any) => void) {
     // Connect with unauthenticated process
     const unauthenticatedApi = await Hue.v3.api.createLocal(this.config.gateway).connect();
 
@@ -139,18 +139,25 @@ export class HueLink {
    *
    * @param callbackFunc Function called on connection success
    */
-  public async connect(callbackFunc: () => void) {
-    try {
-      this.apiLink = await Hue.v3.api.createLocal(this.config.gateway).connect(this.config.username);
-      // Test if link works
-      await this.apiLink.groups.getAll();
-      console.log('HUE: Connected');
-      if (callbackFunc) {
-        callbackFunc();
-      }
-    } catch (error) {
-      console.error(`HUE: ${error.message}`);
-    }
+  public connect(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        Hue.v3.api.createLocal(this.config.gateway).connect(this.config.username).then((hueApi) => {
+          this.apiLink = hueApi;
+          // Test if link works
+          this.apiLink.groups.getAll().then(() => {
+            console.log('HUE: Connected');
+            resolve();
+            }).catch(() => reject());
+        }).catch((error: Error) => {
+          console.error(`HUE: ${error.message}`);
+          reject()
+        });
+        /*
+        if (callbackFunc) {
+          callbackFunc();
+        }
+        */
+    });
   }
 
   /**
@@ -197,8 +204,8 @@ export class HueLink {
         const targetProperty = topicData[4];
         const rawDeviceId = `${deviceType}-${deviceId}`;
         // Test if device type, device and state to change exists
-        if (this.cache.hasOwnProperty(rawDeviceId) &&
-            this.cache[rawDeviceId].state.hasOwnProperty(targetProperty) &&
+        if (Object.prototype.hasOwnProperty.call(this.cache, rawDeviceId) &&
+            Object.prototype.hasOwnProperty.call(this.cache[rawDeviceId].state, targetProperty) &&
             this.cache[rawDeviceId].state[targetProperty] !== data) {
           // Call specific method depends of device type
           const parsedData: any = {};
@@ -228,12 +235,11 @@ export class HueLink {
    */
   public publishProperties(deviceId: string, deviceType: string, deviceState: any): boolean {
     const properties = Object.keys(deviceState).filter((stateId) => { return this.managedProperties[stateId] !== undefined; });
-    // console.log(Object.keys(deviceState).filter((stateId) => { return managedProperties[stateId] === undefined; }));
     if (properties.length > 0) {
       // Publish list of properties
       this.publishToMqtt(`${deviceId}/${deviceType}/$properties`, properties.join(','));
       for (const propertyName of properties) {
-        if (deviceState.hasOwnProperty(propertyName)) {
+        if (Object.prototype.hasOwnProperty.call(deviceState, propertyName)) {
           this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}`, deviceState[propertyName]);
           this.cache[deviceId].state[propertyName] = deviceState[propertyName];
           for (const propertyInfo of Object.keys(this.managedProperties[propertyName])) {
@@ -293,7 +299,7 @@ export class HueLink {
         const devicePayload = device.getHuePayload();
         const deviceId = `${deviceType}-${devicePayload.id}`;
 
-        if (state.hasOwnProperty('reachable') && !state.reachable) {
+        if (Object.prototype.hasOwnProperty.call(state, 'reachable') && !state.reachable) {
           deviceState = 'disconnected';
         }
         this.publishToMqtt(`${deviceId}/${deviceType}/$name`, deviceTypes[deviceType]);
@@ -351,7 +357,7 @@ export class HueLink {
   /**
    * Stop HUE refresh loop
    */
-  public stop() {
+  public stop(): void {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
     }
