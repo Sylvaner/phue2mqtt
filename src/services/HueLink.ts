@@ -233,10 +233,12 @@ export class HueLink {
       // Publish list of properties
       this.publishToMqtt(`${deviceId}/${deviceType}/$properties`, properties.join(','));
       for (const propertyName of properties) {
-        this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}`, deviceState[propertyName]);
-        this.cache[deviceId].state[propertyName] = deviceState[propertyName];
-        for (const propertyInfo of Object.keys(this.managedProperties[propertyName])) {
-          this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}/${propertyInfo}`, this.managedProperties[propertyName][propertyInfo]);
+        if (deviceState.hasOwnProperty(propertyName)) {
+          this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}`, deviceState[propertyName]);
+          this.cache[deviceId].state[propertyName] = deviceState[propertyName];
+          for (const propertyInfo of Object.keys(this.managedProperties[propertyName])) {
+            this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}/${propertyInfo}`, this.managedProperties[propertyName][propertyInfo]);
+          }
         }
       }
       return true;
@@ -294,7 +296,7 @@ export class HueLink {
         if (state.hasOwnProperty('reachable') && !state.reachable) {
           deviceState = 'disconnected';
         }
-        this.mqttConnector.publishAndRetain(`${deviceId}/${deviceType}/$name`, deviceTypes[deviceType]);
+        this.publishToMqtt(`${deviceId}/${deviceType}/$name`, deviceTypes[deviceType]);
         this.cache[deviceId] = {
           id: devicePayload.id,
           name: device.name,
@@ -304,10 +306,10 @@ export class HueLink {
         if (!this.publishProperties(deviceId, deviceType, state)) {
           console.warn(`Device ${devicePayload.name} has no property managed by Phue2mqtt`);
         }
-        this.mqttConnector.publishAndRetain(`${deviceId}/$homie`, '4.0');
-        this.mqttConnector.publishAndRetain(`${deviceId}/$name`, devicePayload.name);
-        this.mqttConnector.publishAndRetain(`${deviceId}/$state`, deviceState);
-        this.mqttConnector.publishAndRetain(`${deviceId}/$nodes`, deviceType);
+        this.publishToMqtt(`${deviceId}/$homie`, '4.0');
+        this.publishToMqtt(`${deviceId}/$name`, devicePayload.name);
+        this.publishToMqtt(`${deviceId}/$state`, deviceState);
+        this.publishToMqtt(`${deviceId}/$nodes`, deviceType);
         if (this.debug) {
           console.log(` - Published ${device.name} - ${deviceId}`);
         }
@@ -353,5 +355,15 @@ export class HueLink {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
     }
+  }
+
+  /**
+   * Publish to Mqtt topic
+   *
+   * @param topic MQTT topic
+   * @param data Data to publish
+   */
+  private publishToMqtt(topic: string, data: any): void {
+    this.mqttConnector.publish(`homie/${topic}`, data);
   }
 }
