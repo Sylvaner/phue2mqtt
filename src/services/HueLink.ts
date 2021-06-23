@@ -346,7 +346,7 @@ export class HueLink {
                 console.log(` - Change published ${deviceId} -> ${propertyName}: ${state[propertyName]}`)
               }
               this.cache[deviceId].state[propertyName] = state[propertyName];
-              this.mqttConnector.publish(`${deviceId}/${deviceType}/${propertyName}`, state[propertyName]);
+              this.publishToMqtt(`${deviceId}/${deviceType}/${propertyName}`, state[propertyName]);
             }
           }
         }
